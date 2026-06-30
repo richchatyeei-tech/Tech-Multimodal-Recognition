@@ -72,6 +72,41 @@ def _offset_boxed_list(items: list | None, ox: float, oy: float) -> list[dict[st
     return result
 
 
+VLM_COORD_NORM = 1000.0
+
+
+def _norm_to_crop_box(
+    box: dict[str, float], crop_w: int, crop_h: int
+) -> dict[str, float]:
+    """VLM 0~1000 归一化坐标 → 裁切图像素。"""
+    return {
+        "x": round(float(box.get("x", 0)) / VLM_COORD_NORM * crop_w, 2),
+        "y": round(float(box.get("y", 0)) / VLM_COORD_NORM * crop_h, 2),
+        "w": round(float(box.get("w", 0)) / VLM_COORD_NORM * crop_w, 2),
+        "h": round(float(box.get("h", 0)) / VLM_COORD_NORM * crop_h, 2),
+    }
+
+
+def _norm_structure_to_crop_pixels(
+    structure: dict[str, Any], crop_w: int, crop_h: int
+) -> dict[str, Any]:
+    result = copy.deepcopy(structure)
+    if isinstance(result.get("big_q_title_box"), dict):
+        result["big_q_title_box"] = _norm_to_crop_box(
+            result["big_q_title_box"], crop_w, crop_h
+        )
+    for sq in result.get("sub_questions", []):
+        if isinstance(sq.get("sub_q_title_box"), dict):
+            sq["sub_q_title_box"] = _norm_to_crop_box(
+                sq["sub_q_title_box"], crop_w, crop_h
+            )
+        for key in ("handwrites", "options"):
+            for item in sq.get(key, []) or []:
+                if isinstance(item.get("box"), dict):
+                    item["box"] = _norm_to_crop_box(item["box"], crop_w, crop_h)
+    return result
+
+
 def _clamp_box(box: dict[str, float], image_w: int, image_h: int) -> dict[str, float] | None:
     x = float(box.get("x", 0))
     y = float(box.get("y", 0))
@@ -137,22 +172,24 @@ def offset_structure_to_origin(
     image_h: int,
 ) -> dict[str, Any]:
     """
-    将 VLM 裁切图像素坐标映射回原图。
+    将 VLM 0~1000 归一化坐标映射回原图。
 
-    VLM 约定输出裁切图坐标系（0 ≤ x,y,w,h 在裁切图范围内）；
+    步骤：归一化 → 裁切图像素 → 加 crop origin。
     origin_x/y 为裁切图左上角在原图中的位置（含 crop padding）。
     """
     logger.debug(
-        "VLM 坐标回填原图: origin=(%s,%s) crop=%sx%s",
+        "VLM 坐标回填原图: origin=(%s,%s) crop=%sx%s norm=0~%s",
         origin_x,
         origin_y,
         crop_w,
         crop_h,
+        int(VLM_COORD_NORM),
     )
-    mapped = dict(structure)
+    crop_pixels = _norm_structure_to_crop_pixels(structure, crop_w, crop_h)
+    mapped = dict(crop_pixels)
     _offset_box_field(mapped, "big_q_title_box", origin_x, origin_y)
     sub_questions = []
-    for sq in structure.get("sub_questions", []):
+    for sq in crop_pixels.get("sub_questions", []):
         sq_copy = dict(sq)
         _offset_box_field(sq_copy, "sub_q_title_box", origin_x, origin_y)
         sq_copy["handwrites"] = _offset_boxed_list(sq.get("handwrites"), origin_x, origin_y)

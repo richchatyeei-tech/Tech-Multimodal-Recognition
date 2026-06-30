@@ -21,24 +21,26 @@ def test_prompt_schema() -> None:
     assert "LaTeX" in prompt
     assert "has_formula" not in prompt
     assert "elements" not in prompt
-    assert "800" in prompt and "1200" in prompt
-    assert "输入图片" in prompt and "像素" in prompt
+    assert "输入图片" in prompt
+    assert "0~1000" in prompt
+    assert "像素" not in prompt or "不要输出像素" in prompt
     assert "原图" not in prompt
-    assert "0~1000" in prompt  # 禁止项说明
-    print("  [OK] Prompt 含 handwrites/options 与输入图像素坐标约定")
+    print("  [OK] Prompt 含 handwrites/options 与 0~1000 坐标约定")
 
 
-def test_offset_uses_crop_origin() -> None:
+def test_norm_to_origin() -> None:
+    """0~1000 归一化 → 裁切像素 → 加 origin 回填原图。"""
     split_box = {"x": 100, "y": 200, "w": 300, "h": 400}
     origin_x, origin_y = crop_origin(split_box)
     assert origin_x == 92 and origin_y == 192
+    crop_w, crop_h = 316, 416
 
     structure = {
-        "big_q_title_box": {"x": 10, "y": 20, "w": 100, "h": 30},
+        "big_q_title_box": {"x": 100, "y": 100, "w": 500, "h": 100},
         "sub_questions": [
             {
                 "sub_q_idx": 1,
-                "handwrites": [{"text": "答案", "box": {"x": 30, "y": 70, "w": 40, "h": 15}}],
+                "handwrites": [{"text": "答案", "box": {"x": 200, "y": 300, "w": 150, "h": 50}}],
                 "options": [],
             }
         ],
@@ -47,34 +49,15 @@ def test_offset_uses_crop_origin() -> None:
         structure,
         origin_x,
         origin_y,
-        crop_w=316,
-        crop_h=416,
+        crop_w=crop_w,
+        crop_h=crop_h,
         image_w=2000,
         image_h=3000,
     )
-    assert mapped["big_q_title_box"]["x"] == 102
-    assert mapped["sub_questions"][0]["handwrites"][0]["box"]["x"] == 122
-    print("  [OK] 坐标按裁切图 origin（含 padding）回填")
-
-
-def test_always_offset_crop_pixel_coords() -> None:
-    """无论坐标大小，一律按裁切图像素 + origin 回填（不做原图绝对坐标猜测）。"""
-    structure = {
-        "big_q_title_box": {"x": 120, "y": 80, "w": 100, "h": 30},
-        "sub_questions": [],
-    }
-    mapped = offset_structure_to_origin(
-        structure,
-        92,
-        192,
-        crop_w=300,
-        crop_h=400,
-        image_w=2000,
-        image_h=3000,
-    )
-    assert mapped["big_q_title_box"]["x"] == 212
-    assert mapped["big_q_title_box"]["y"] == 272
-    print("  [OK] 裁切图像素坐标无条件回填原图")
+    # big_q: x=100/1000*316+92=123.6, handwrite x=200/1000*316+92=155.2
+    assert mapped["big_q_title_box"]["x"] == 123.6
+    assert mapped["sub_questions"][0]["handwrites"][0]["box"]["x"] == 155.2
+    print("  [OK] 0~1000 归一化坐标回填原图")
 
 
 def test_pic_location_parse() -> None:
@@ -104,8 +87,7 @@ def test_pic_location_parse() -> None:
 def main() -> int:
     print("验证结构化 Schema …")
     test_prompt_schema()
-    test_offset_uses_crop_origin()
-    test_always_offset_crop_pixel_coords()
+    test_norm_to_origin()
     test_pic_location_parse()
     print("全部通过")
     return 0

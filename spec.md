@@ -247,15 +247,15 @@ split_box = union(qus_location 全部框)
 ### 6.4 Prompt 要点
 
 - 输出**纯 JSON**，不含 markdown 代码块
-- **Prompt 只描述输入图片**：VLM 仅看到单题裁切图，坐标相对于该图（宽/高由后端注入 `{crop_width}`×`{crop_height}`），不涉及整卷原图
-- 坐标**固定为输入图像素**（原点=左上角）：
-  - `0 ≤ x, y, w, h`，且 `x+w ≤ crop_width`，`y+h ≤ crop_height`
-  - 禁止 0~1000 归一化
-- **后端**（非 Prompt）按裁切 origin 回填整卷原图：
+- **Prompt 只描述输入图片**：VLM 仅看到单题裁切图，不涉及整卷原图
+- 坐标**固定为输入图 0~1000 归一化**（原点=左上角，1000=右/下边缘）：
+  - `x`、`w` 相对图片宽度；`y`、`h` 相对图片高度
+  - `0 ≤ x,y,w,h ≤ 1000`，且 `x+w ≤ 1000`，`y+h ≤ 1000`
+- **后端**（非 Prompt）两步回填整卷原图：
 
 ```
-crop_origin_x = split_box.x - padding
-原图_x = crop_origin_x + VLM裁切图_x
+crop_x = VLM_x / 1000 × crop_width
+原图_x = crop_origin_x + crop_x
 ```
 
 - 超大异常框（宽/高 > 原图 95%）在输出前过滤
