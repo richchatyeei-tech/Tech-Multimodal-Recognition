@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教育文档结构化解析 Demo</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e8edf5;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --split: #3b82f6;
+      --handwrite: #22c55e;
+      --title: #f59e0b;
+      --sub-title: #c084fc;
+      --option: #38bdf8;
+      --figure: #fb923c;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    select, button, input[type="file"], label.toggle {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); border-color: var(--border); }
+    label.toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      height: calc(100vh - 65px);
+    }
+    @media (max-width: 960px) {
+      main { grid-template-columns: 1fr; height: auto; }
+    }
+    .left, .right {
+      overflow: auto;
+      padding: 16px;
+      border-right: 1px solid var(--border);
+    }
+    .right { border-right: none; display: flex; flex-direction: column; gap: 12px; }
+    .canvas-wrap {
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      min-height: 320px;
+    }
+    canvas { display: block; max-width: 100%; height: auto; }
+    .legend {
+      display: flex;
+      gap: 16px;
+      margin: 10px 0;
+      font-size: 12px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+    .stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .stat b { color: var(--accent); }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tab {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      flex: 1;
+      overflow: auto;
+    }
+    .card h3 { font-size: 14px; margin-bottom: 8px; }
+    .meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+    .sub-q {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      margin-top: 10px;
+    }
+    .sub-q h4 { font-size: 13px; margin-bottom: 6px; }
+    .el {
+      font-size: 12px;
+      padding: 6px 8px;
+      background: #121a26;
+      border-radius: 6px;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    .el .type {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #243044;
+      color: var(--muted);
+      margin-right: 6px;
+    }
+    pre.json {
+      background: #0a0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 11px;
+      overflow: auto;
+      max-height: 240px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #a8b8d0;
+    }
+    .status { font-size: 13px; color: var(--muted); min-height: 20px; }
+    .status.error { color: var(--danger); }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #243044;
+    }
+    .badge.ok { background: #14532d; color: #86efac; }
+    .badge.fail { background: #450a0a; color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>教育文档结构化解析 Demo</h1>
+    <div class="toolbar">
+      <select id="sampleSelect"><option value="">选择样例…</option></select>
+      <input type="file" id="fileInput" accept="image/*" />
+      <select id="modelSelect"></select>
+      <label class="toggle"><input type="checkbox" id="skipVlm" /> 仅切题</label>
+      <label class="toggle"><input type="checkbox" id="enhance" /> 矫正增强</label>
+      <label class="toggle"><input type="checkbox" id="knowledge" /> 知识点</label>
+      <button id="parseBtn">开始解析</button>
+      <button id="verifyVlmBtn" class="secondary">测试 VLM</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="left">
+      <div class="status" id="status">上传图片或选择样例后点击「开始解析」</div>
+      <div class="legend" id="legend">
+        <span><i class="dot" style="background:var(--split)"></i>单题区 · OCR qus_location</span>
+        <span><i class="dot" style="background:var(--figure)"></i>配图 · OCR pic_location</span>
+        <span><i class="dot" style="background:var(--title)"></i>主题干 · VLM</span>
+        <span><i class="dot" style="background:var(--sub-title)"></i>子题干 · VLM</span>
+        <span><i class="dot" style="background:var(--option)"></i>选项 · VLM options</span>
+        <span><i class="dot" style="background:var(--handwrite)"></i>手写 · VLM handwrites</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+    </section>
+
+    <section class="right">
+      <div class="stats" id="stats"></div>
+      <div class="tabs" id="tabs"></div>
+      <div class="card" id="detail"><p class="meta">解析结果将显示在这里</p></div>
+      <details open>
+        <summary style="cursor:pointer;font-size:13px;color:var(--muted);margin-bottom:6px;">完整 JSON</summary>
+        <pre class="json" id="jsonOut">{}</pre>
+      </details>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let currentImage = null;
+    let currentFile = null;
+    let parseResult = null;
+    let activeIdx = 0;
+
+    async function init() {
+      const models = await fetch('/api/models').then(r => r.json());
+      const sel = document.getElementById('modelSelect');
+      models.models.forEach(m => {
+        const o = document.createElement('option');
+        const id = typeof m === 'string' ? m : m.id;
+        const label = typeof m === 'string' ? m : (m.label || m.id);
+        o.value = id;
+        o.textContent = label;
+        sel.appendChild(o);
+      });
+
+      const samples = await fetch('/api/samples').then(r => r.json());
+      const ss = document.getElementById('sampleSelect');
+      samples.samples.forEach(name => {
+        const o = document.createElement('option');
+        o.value = name; o.textContent = name;
+        ss.appendChild(o);
+      });
+    }
+
+    document.getElementById('sampleSelect').addEventListener('change', async (e) => {
+      const name = e.target.value;
+      if (!name) return;
+      const res = await fetch(`/api/samples/${encodeURIComponent(name)}`);
+      const blob = await res.blob();
+      currentFile = new File([blob], name, { type: blob.type });
+      await loadImageFromFile(currentFile);
+      setStatus(`已加载样例：${name}`);
+    });
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      currentFile = file;
+      await loadImageFromFile(file);
+      setStatus(`已选择：${file.name}`);
+    });
+
+    function loadImageFromFile(file) {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          currentImage = img;
+          URL.revokeObjectURL(url);
+          drawBase();
+          resolve();
+        };
+        img.src = url;
+      });
+    }
+
+    function drawBase() {
+      if (!currentImage) return;
+      canvas.width = currentImage.width;
+      canvas.height = currentImage.height;
+      ctx.drawImage(currentImage, 0, 0);
+    }
+
+    function drawBox(box, color, label, lw = 2) {
+      if (!box || !box.w || !canvas.width) return;
+      const x = Number(box.x);
+      const y = Number(box.y);
+      const w = Number(box.w);
+      const h = Number(box.h);
+      if (w <= 0 || h <= 0) return;
+      if (x + w < 0 || y + h < 0) return;
+      if (x > canvas.width || y > canvas.height) return;
+      if (w > canvas.width * 0.92 || h > canvas.height * 0.92) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lw;
+      ctx.strokeRect(x, y, w, h);
+      if (label) {
+        ctx.fillStyle = color;
+        ctx.font = '14px sans-serif';
+        ctx.fillText(label, x + 4, y + 16);
+      }
+    }
+
+    function hasVlmBoxes(question) {
+      if (question.BigQTitleBox?.w > 0) return true;
+      return (question.SubQuestions || []).some(sq =>
+        sq.sub_q_title_box?.w > 0
+        || (sq.handwrites || []).some(h => h.box?.w > 0)
+        || (sq.options || []).some(o => o.box?.w > 0)
+      );
+    }
+
+    function collectOverlayBoxes(question) {
+      const items = [];
+      (question.PicBoxes || []).forEach((box, i) => {
+        items.push({ box, color: '#fb923c', label: i === 0 ? '配图' : '' });
+      });
+      if (question.BigQTitleBox?.w > 0) {
+        items.push({ box: question.BigQTitleBox, color: '#f59e0b', label: '主题干' });
+      }
+      (question.SubQuestions || []).forEach(sq => {
+        if (sq.sub_q_title_box?.w > 0) {
+          items.push({
+            box: sq.sub_q_title_box,
+            color: '#c084fc',
+            label: `子题${sq.sub_q_idx || ''}`,
+          });
+        }
+        (sq.options || []).forEach(opt => {
+          if (!opt.box?.w) return;
+          items.push({
+            box: opt.box,
+            color: '#38bdf8',
+            label: opt.label || '选项',
+          });
+        });
+        (sq.handwrites || []).forEach(hw => {
+          if (!hw.box?.w) return;
+          items.push({ box: hw.box, color: '#22c55e', label: '手写' });
+        });
+      });
+      return items;
+    }
+
+    function renderOverlay(questions, highlightIdx) {
+      drawBase();
+      questions.forEach((q, i) => {
+        const isActive = i === highlightIdx;
+        const color = isActive ? '#60a5fa' : 'rgba(59,130,246,0.55)';
+        drawBox(q.SplitBox, color, isActive ? `题${q.BigQIdx}` : '', isActive ? 3 : 2);
+      });
+
+      const active = questions[highlightIdx];
+      if (!active) return;
+      collectOverlayBoxes(active).forEach(({ box, color, label }) => {
+        drawBox(box, color, label, 2);
+      });
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'status' + (isError ? ' error' : '');
+    }
+
+    function renderResult(data) {
+      parseResult = data;
+      const resp = data.Response || {};
+      document.getElementById('jsonOut').textContent = JSON.stringify(data, null, 2);
+
+      const stats = resp.Stats || {};
+      document.getElementById('stats').innerHTML = `
+        <div class="stat">状态 <b>${resp.JobStatus || '-'}</b></div>
+        <div class="stat">切题数 <b>${stats.total_big_questions || 0}</b></div>
+        <div class="stat">结构化成功 <b>${stats.parsed_big_questions || 0}</b></div>
+        <div class="stat">子题数 <b>${stats.total_sub_questions || 0}</b></div>
+      `;
+
+      const questions = resp.QuestionInfos || [];
+      const tabs = document.getElementById('tabs');
+      tabs.innerHTML = '';
+      questions.forEach((q, i) => {
+        const t = document.createElement('button');
+        t.className = 'tab' + (i === activeIdx ? ' active' : '');
+        t.textContent = `题 ${q.BigQIdx || i + 1}`;
+        t.onclick = () => { activeIdx = i; renderResult(data); };
+        tabs.appendChild(t);
+      });
+
+      if (!questions.length) {
+        document.getElementById('detail').innerHTML = '<p class="meta">无题目数据</p>';
+        return;
+      }
+
+      const q = questions[activeIdx] || questions[0];
+      renderOverlay(questions, activeIdx);
+
+      const badge = q.ParseStatus === 'SUCCESS' ? 'ok' : (q.ParseStatus === 'SKIPPED' ? '' : 'fail');
+      let html = `
+        <h3>${q.BigQTitle || `题目 ${q.BigQIdx}`} <span class="badge ${badge}">${q.ParseStatus}</span></h3>
+        <div class="meta">
+          学科：${q.Subject || '-'} · 题型：${q.QuestionType || '-'}<br/>
+          ${q.KnowledgePoints?.length ? '知识点：' + q.KnowledgePoints.join('、') : ''}
+          ${q.Error ? '<br/><span style="color:#f87171">错误：' + q.Error + '</span>' : ''}
+        </div>
+      `;
+
+      (q.SubQuestions || []).forEach(sq => {
+        html += `<div class="sub-q"><h4>${sq.sub_q_title || '子题 ' + sq.sub_q_idx}</h4>`;
+        (sq.options || []).forEach(opt => {
+          html += `<div class="el"><span class="type">option</span>${opt.label || ''} ${opt.text || '(无文本)'}
+            ${opt.box?.w ? `<br/><span style="color:#64748b">box: ${JSON.stringify(opt.box)}</span>` : ''}</div>`;
+        });
+        (sq.handwrites || []).forEach(hw => {
+          html += `<div class="el"><span class="type">handwrite</span>${hw.text || '(无文本)'}
+            ${hw.box?.w ? `<br/><span style="color:#64748b">box: ${JSON.stringify(hw.box)}</span>` : ''}</div>`;
+        });
+        html += '</div>';
+      });
+
+      if (!q.SubQuestions?.length && q.ParseStatus === 'SKIPPED') {
+        html += '<p class="meta">已跳过 VLM 结构化，展示 OCR 单题框（蓝）与配图框（橙）。</p>';
+      } else if (q.ParseStatus === 'SUCCESS' && !hasVlmBoxes(q)) {
+        html += '<p class="meta">VLM 未返回有效坐标框，请检查模型输出。</p>';
+      }
+
+      document.getElementById('detail').innerHTML = html;
+    }
+
+    async function runParse() {
+      if (!currentFile) { setStatus('请先上传图片或选择样例', true); return; }
+      const btn = document.getElementById('parseBtn');
+      btn.disabled = true;
+      setStatus('解析中…');
+
+      const fd = new FormData();
+      fd.append('file', currentFile);
+      fd.append('model', document.getElementById('modelSelect').value);
+      fd.append('skip_vlm', document.getElementById('skipVlm').checked);
+      fd.append('enhance', document.getElementById('enhance').checked);
+      fd.append('enable_knowledge_points', document.getElementById('knowledge').checked);
+      fd.append('max_questions', '8');
+
+      try {
+        const res = await fetch('/api/parse', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || '请求失败');
+        activeIdx = 0;
+        renderResult(data);
+        setStatus('解析完成');
+      } catch (e) {
+        setStatus(e.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function verifyVlm() {
+      if (!currentFile) { setStatus('请先上传图片', true); return; }
+      setStatus('测试 VLM 连通性…');
+      const fd = new FormData();
+      fd.append('file', currentFile);
+      fd.append('model', document.getElementById('modelSelect').value);
+      const res = await fetch('/api/verify-vlm', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.ok) setStatus(`VLM 连通成功 [${data.model}]：${data.content}`);
+      else setStatus(`VLM 失败：${data.error}`, true);
+    }
+
+    document.getElementById('parseBtn').addEventListener('click', runParse);
+    document.getElementById('verifyVlmBtn').addEventListener('click', verifyVlm);
+    init();
+  </script>
+</body>
+</html>
